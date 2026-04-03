@@ -282,6 +282,45 @@ class Profile:
         )
 
 
+# ─── Agent Types ──────────────────────────────────────────────────────
+
+
+@dataclass
+class AgentStep:
+    iteration: int
+    reasoning: str
+    actions: list[dict[str, Any]]
+    screenshot: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> AgentStep:
+        return cls(
+            iteration=data["iteration"],
+            reasoning=data["reasoning"],
+            actions=data.get("actions", []),
+            screenshot=data.get("screenshot"),
+        )
+
+
+@dataclass
+class AgentResult:
+    success: bool
+    steps: list[AgentStep]
+    total_iterations: int
+    result: str | None = None
+    error: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> AgentResult:
+        return cls(
+            success=data["success"],
+            steps=[AgentStep.from_dict(s) for s in data.get("steps", [])],
+            total_iterations=data.get("totalIterations", 0),
+            result=data.get("result"),
+            error=data.get("error"),
+        )
+
+
 # ─── Usage Types ───────────────────────────────────────────────────────────
 
 

@@ -1,6 +1,6 @@
 """BrowseFleet Python SDK — cloud browser API for AI agents and automation."""
 
-from .client import BrowseFleet
+from .client import AsyncBrowseFleet, BrowseFleet
 from .errors import (
     AuthError,
     BrowseFleetError,
@@ -13,6 +13,8 @@ from .errors import (
 from .types import (
     ActionResponse,
     ActionResult,
+    AgentResult,
+    AgentStep,
     CaptchaResult,
     Profile,
     ScrapeResult,
@@ -21,6 +23,7 @@ from .types import (
 )
 
 __all__ = [
+    "AsyncBrowseFleet",
     "BrowseFleet",
     "BrowseFleetError",
     "AuthError",
@@ -31,6 +34,8 @@ __all__ = [
     "ValidationError",
     "ActionResponse",
     "ActionResult",
+    "AgentResult",
+    "AgentStep",
     "CaptchaResult",
     "Profile",
     "ScrapeResult",
