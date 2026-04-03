@@ -7,6 +7,7 @@ from .errors import (
     NotFoundError,
     RateLimitError,
     ServerError,
+    TimeoutError,
     ValidationError,
 )
 from .types import (
@@ -26,6 +27,7 @@ __all__ = [
     "NotFoundError",
     "RateLimitError",
     "ServerError",
+    "TimeoutError",
     "ValidationError",
     "ActionResponse",
     "ActionResult",

@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import os
+import random
+import time
 from typing import Any, Sequence
+from urllib.parse import quote
 
 import httpx
 
@@ -12,6 +16,7 @@ from .errors import (
     NotFoundError,
     RateLimitError,
     ServerError,
+    TimeoutError,
     ValidationError,
 )
 from .types import (
@@ -92,7 +97,7 @@ class _SessionsResource:
         Returns:
             Session object.
         """
-        data = self._client._request("GET", f"/v1/sessions/{session_id}")
+        data = self._client._request("GET", f"/v1/sessions/{quote(session_id, safe='')}")
         return Session.from_dict(data)
 
     def release(self, session_id: str) -> bool:
@@ -104,7 +109,7 @@ class _SessionsResource:
         Returns:
             True if released successfully.
         """
-        data = self._client._request("POST", f"/v1/sessions/{session_id}/release")
+        data = self._client._request("POST", f"/v1/sessions/{quote(session_id, safe='')}/release")
         return data.get("released", False)
 
     def release_all(self) -> int:
@@ -139,7 +144,7 @@ class _SessionsResource:
             ActionResponse with results for each action.
         """
         body = {"actions": _convert_keys(list(actions))}
-        data = self._client._request("POST", f"/v1/sessions/{session_id}/actions", json=body)
+        data = self._client._request("POST", f"/v1/sessions/{quote(session_id, safe='')}/actions", json=body)
         return ActionResponse.from_dict(data)
 
     def solve_captcha(
@@ -158,7 +163,7 @@ class _SessionsResource:
         """
         data = self._client._request(
             "POST",
-            f"/v1/sessions/{session_id}/captcha/solve",
+            f"/v1/sessions/{quote(session_id, safe='')}/captcha/solve",
             json={"type": type},
         )
         return CaptchaResult.from_dict(data)
@@ -177,7 +182,7 @@ class _SessionsResource:
         files = {"file": (file_name, file_data)}
         return self._client._request(
             "POST",
-            f"/v1/sessions/{session_id}/files",
+            f"/v1/sessions/{quote(session_id, safe='')}/files",
             files=files,
         )
 
@@ -190,7 +195,7 @@ class _SessionsResource:
         Returns:
             List of file paths.
         """
-        data = self._client._request("GET", f"/v1/sessions/{session_id}/files")
+        data = self._client._request("GET", f"/v1/sessions/{quote(session_id, safe='')}/files")
         return data.get("files", [])
 
     def download_file(self, session_id: str, file_name: str) -> bytes:
@@ -205,7 +210,7 @@ class _SessionsResource:
         """
         return self._client._request_raw(
             "GET",
-            f"/v1/sessions/{session_id}/files/{file_name}",
+            f"/v1/sessions/{quote(session_id, safe='')}/files/{quote(file_name, safe='')}",
         )
 
 
@@ -245,7 +250,7 @@ class _ProfilesResource:
         Returns:
             Profile object.
         """
-        data = self._client._request("GET", f"/v1/profiles/{profile_id}")
+        data = self._client._request("GET", f"/v1/profiles/{quote(profile_id, safe='')}")
         return Profile.from_dict(data)
 
     def delete(self, profile_id: str) -> bool:
@@ -257,7 +262,7 @@ class _ProfilesResource:
         Returns:
             True if deleted successfully.
         """
-        data = self._client._request("DELETE", f"/v1/profiles/{profile_id}")
+        data = self._client._request("DELETE", f"/v1/profiles/{quote(profile_id, safe='')}")
         return data.get("deleted", False)
 
 
@@ -281,16 +286,22 @@ class BrowseFleet:
 
     def __init__(
         self,
-        api_key: str,
-        base_url: str,
+        api_key: str | None = None,
+        base_url: str = "https://api.browsefleet.com",
         timeout: float = 60.0,
+        max_retries: int = 2,
     ) -> None:
+        resolved_key = api_key or os.environ.get("BROWSEFLEET_API_KEY")
+        if not resolved_key:
+            raise AuthError("api_key is required — pass it directly or set BROWSEFLEET_API_KEY")
         self._base_url = base_url.rstrip("/")
+        self._max_retries = max_retries
         self._client = httpx.Client(
             base_url=self._base_url,
             headers={
-                "Authorization": f"Bearer {api_key}",
+                "Authorization": f"Bearer {resolved_key}",
                 "Content-Type": "application/json",
+                "User-Agent": "browsefleet-python/0.1.0",
             },
             timeout=timeout,
         )
@@ -389,21 +400,62 @@ class BrowseFleet:
 
     # ─── Internal ───────────────────────────────────────────────────────────
 
-    def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
-        """Make a JSON API request and return the parsed response."""
+    @staticmethod
+    def _is_retryable(status: int) -> bool:
+        return status == 429 or status >= 500
+
+    @staticmethod
+    def _retry_delay(attempt: int, retry_after: str | None = None) -> float:
+        if retry_after:
+            try:
+                seconds = float(retry_after)
+                if seconds > 0:
+                    return seconds
+            except ValueError:
+                pass
+        base = min(1.0 * (2 ** attempt), 30.0)
+        jitter = random.uniform(0, 0.2)
+        return base + jitter
+
+    def _do_request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        """Execute a request with retry logic and exception wrapping."""
         # For file uploads, remove Content-Type so httpx sets multipart boundary
         if "files" in kwargs:
             headers = {k: v for k, v in self._client.headers.items() if k.lower() != "content-type"}
             kwargs["headers"] = headers
 
-        response = self._client.request(method, path, **kwargs)
-        self._raise_for_status(response)
+        last_response: httpx.Response | None = None
+        for attempt in range(self._max_retries + 1):
+            try:
+                response = self._client.request(method, path, **kwargs)
+            except httpx.TimeoutException as exc:
+                raise TimeoutError(f"Request timed out: {exc}") from exc
+
+            if response.is_success:
+                return response
+
+            last_response = response
+
+            if self._is_retryable(response.status_code) and attempt < self._max_retries:
+                delay = self._retry_delay(attempt, response.headers.get("retry-after"))
+                time.sleep(delay)
+                continue
+
+            self._raise_for_status(response)
+
+        # Should not reach here, but satisfy type checker
+        assert last_response is not None
+        self._raise_for_status(last_response)
+        raise BrowseFleetError("Request failed after retries")  # unreachable
+
+    def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
+        """Make a JSON API request and return the parsed response."""
+        response = self._do_request(method, path, **kwargs)
         return response.json()
 
     def _request_raw(self, method: str, path: str, **kwargs: Any) -> bytes:
         """Make an API request and return raw bytes (for screenshots, PDFs, files)."""
-        response = self._client.request(method, path, **kwargs)
-        self._raise_for_status(response)
+        response = self._do_request(method, path, **kwargs)
         return response.content
 
     @staticmethod

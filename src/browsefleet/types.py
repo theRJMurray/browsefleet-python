@@ -155,10 +155,13 @@ class ScreenshotAction(TypedDict):
     type: Literal["screenshot"]
 
 
-class ClickAction(TypedDict, total=False):
+class _ClickActionRequired(TypedDict):
     type: Literal["click"]
     x: int
     y: int
+
+
+class ClickAction(_ClickActionRequired, total=False):
     button: Literal["left", "right", "middle"]
     click_count: int
 
@@ -173,8 +176,11 @@ class PressKeyAction(TypedDict):
     key: str
 
 
-class ScrollAction(TypedDict, total=False):
+class _ScrollActionRequired(TypedDict):
     type: Literal["scroll"]
+
+
+class ScrollAction(_ScrollActionRequired, total=False):
     x: int
     y: int
     delta_x: int

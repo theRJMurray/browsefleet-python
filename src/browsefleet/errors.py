@@ -30,3 +30,7 @@ class ValidationError(BrowseFleetError):
 
 class ServerError(BrowseFleetError):
     """Raised on 5xx responses."""
+
+
+class TimeoutError(BrowseFleetError):
+    """Raised when a request times out."""
