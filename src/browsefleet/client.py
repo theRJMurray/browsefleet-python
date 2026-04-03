@@ -669,8 +669,10 @@ class BrowseFleet:
 
             for line in response.iter_lines():
                 if line.startswith("data: "):
-                    payload = line[6:]
-                    if payload.strip():
+                    payload = line[6:].strip()
+                    if payload == "[DONE]":
+                        return
+                    if payload:
                         try:
                             yield _json.loads(payload)
                         except _json.JSONDecodeError:
@@ -770,10 +772,11 @@ class _AsyncSessionsResource:
         )
 
     async def live(self, session_id: str) -> AsyncIterator[dict[str, Any]]:
-        return self._client._stream_sse(
+        async for item in self._client._stream_sse(
             "GET",
             f"/v1/sessions/{quote(session_id, safe='')}/live",
-        )
+        ):
+            yield item
 
 
 class _AsyncProfilesResource:
@@ -1064,8 +1067,10 @@ class AsyncBrowseFleet:
 
             async for line in response.aiter_lines():
                 if line.startswith("data: "):
-                    payload = line[6:]
-                    if payload.strip():
+                    payload = line[6:].strip()
+                    if payload == "[DONE]":
+                        return
+                    if payload:
                         try:
                             yield _json.loads(payload)
                         except _json.JSONDecodeError:
