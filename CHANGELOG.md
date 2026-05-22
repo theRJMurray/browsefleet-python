@@ -4,8 +4,9 @@ All notable changes to the BrowseFleet Python SDK are documented here. The forma
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the SDK adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## 0.1.0 (2026-05-22)
+## 1.0.0 (2026-05-22)
 
+First public OSS release. MIT licensed. Coordinated v1.0.0 launch alongside the BrowseFleet server and Node SDK.
 
 ### Features
 
