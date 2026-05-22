@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or general discussion
+    url: https://github.com/theRJMurray/browsefleet-python/discussions
+    about: Use Discussions for questions, design conversations, or anything not a clear bug/feature.
+  - name: Security vulnerability
+    url: https://github.com/theRJMurray/browsefleet-python/blob/master/SECURITY.md
+    about: Do not file security issues publicly. See SECURITY.md.
+  - name: Server bug or feature
+    url: https://github.com/theRJMurray/browsefleet/issues
+    about: This SDK mirrors the server. Server-side bugs and features belong in the server repo.

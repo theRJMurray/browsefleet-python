@@ -6,7 +6,8 @@ import json as _json
 import os
 import random
 import time
-from typing import Any, AsyncIterator, Iterator, Sequence
+from collections.abc import AsyncIterator, Iterator, Sequence
+from typing import Any
 from urllib.parse import quote
 
 import httpx
@@ -26,16 +27,21 @@ from .types import (
     AgentStep,
     BrowserAction,
     CaptchaResult,
-    CreateSessionParams,
-    PdfParams,
     Profile,
-    ScrapeParams,
     ScrapeResult,
-    ScreenshotParams,
     Session,
     UsageStats,
-    Viewport,
 )
+
+
+def _sdk_version() -> str:
+    """Return the installed SDK version, or '0.0.0-dev' when running from source."""
+    try:
+        from importlib.metadata import PackageNotFoundError, version
+
+        return version("browsefleet")
+    except (ImportError, PackageNotFoundError):
+        return "0.0.0-dev"
 
 
 def _snake_to_camel(key: str) -> str:
@@ -124,7 +130,7 @@ class _SessionsResource:
         data = self._client._request("POST", "/v1/sessions/release", json={})
         return data.get("released", 0)
 
-    def release_batch(self, ids: list[str]) -> int:
+    def release_batch(self, ids: list[str]) -> int:  # type: ignore[valid-type]
         """Release multiple sessions by ID.
 
         Args:
@@ -135,6 +141,26 @@ class _SessionsResource:
         """
         data = self._client._request("POST", "/v1/sessions/release", json={"ids": ids})
         return data.get("released", 0)
+
+    def control(self, session_id: str, **kwargs: Any) -> Session:
+        """Switch the session's control mode (agent / human / paused) and optionally toggle sensitive mode.
+
+        Args:
+            session_id: The session ID.
+            control_mode: One of "agent", "human", "paused".
+            sensitive_mode: When True, the live viewer and event stream suppress screenshots.
+            reason: Optional free-form reason logged on the server.
+
+        Returns:
+            Updated Session.
+        """
+        body = _convert_keys(kwargs)
+        data = self._client._request(
+            "POST",
+            f"/v1/sessions/{quote(session_id, safe='')}/control",
+            json=body,
+        )
+        return Session.from_dict(data)
 
     def actions(self, session_id: str, actions: Sequence[BrowserAction]) -> ActionResponse:
         """Execute browser actions on a session (Computer API).
@@ -147,7 +173,9 @@ class _SessionsResource:
             ActionResponse with results for each action.
         """
         body = {"actions": _convert_keys(list(actions))}
-        data = self._client._request("POST", f"/v1/sessions/{quote(session_id, safe='')}/actions", json=body)
+        data = self._client._request(
+            "POST", f"/v1/sessions/{quote(session_id, safe='')}/actions", json=body
+        )
         return ActionResponse.from_dict(data)
 
     def solve_captcha(
@@ -189,7 +217,7 @@ class _SessionsResource:
             files=files,
         )
 
-    def list_files(self, session_id: str) -> list[str]:
+    def list_files(self, session_id: str) -> list[str]:  # type: ignore[valid-type]
         """List files associated with a session.
 
         Args:
@@ -361,53 +389,6 @@ class _AgentResource:
                 )
 
 
-class _BillingResource:
-    """Namespace for billing-related API calls."""
-
-    def __init__(self, client: BrowseFleet) -> None:
-        self._client = client
-
-    def create_checkout(self, price_id: str, success_url: str, cancel_url: str) -> dict[str, Any]:
-        """Create a Stripe checkout session.
-
-        Args:
-            price_id: Stripe price ID.
-            success_url: URL to redirect to on success.
-            cancel_url: URL to redirect to on cancel.
-
-        Returns:
-            Dict with checkout URL and session ID.
-        """
-        return self._client._request(
-            "POST",
-            "/v1/billing/checkout",
-            json={"priceId": price_id, "successUrl": success_url, "cancelUrl": cancel_url},
-        )
-
-    def create_portal(self, return_url: str) -> dict[str, Any]:
-        """Create a Stripe billing portal session.
-
-        Args:
-            return_url: URL to return to after portal.
-
-        Returns:
-            Dict with portal URL.
-        """
-        return self._client._request(
-            "POST",
-            "/v1/billing/portal",
-            json={"returnUrl": return_url},
-        )
-
-    def get_usage(self) -> dict[str, Any]:
-        """Get billing usage information.
-
-        Returns:
-            Dict with usage data.
-        """
-        return self._client._request("GET", "/v1/billing/usage")
-
-
 class _ProfilesResource:
     """Namespace for profile-related API calls."""
 
@@ -481,28 +462,30 @@ class BrowseFleet:
     def __init__(
         self,
         api_key: str | None = None,
-        base_url: str = "https://api.browsefleet.com",
+        base_url: str | None = None,
         timeout: float = 60.0,
         max_retries: int = 2,
     ) -> None:
-        resolved_key = api_key or os.environ.get("BROWSEFLEET_API_KEY")
-        if not resolved_key:
-            raise AuthError("api_key is required — pass it directly or set BROWSEFLEET_API_KEY")
-        self._base_url = base_url.rstrip("/")
+        resolved_key = api_key or os.environ.get("BROWSEFLEET_API_KEY") or ""
+        resolved_url = (
+            base_url or os.environ.get("BROWSEFLEET_URL") or "http://localhost:3000"
+        ).rstrip("/")
+        self._base_url = resolved_url
         self._max_retries = max_retries
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": f"browsefleet-python/{_sdk_version()}",
+        }
+        if resolved_key:
+            headers["x-api-key"] = resolved_key
         self._client = httpx.Client(
             base_url=self._base_url,
-            headers={
-                "Authorization": f"Bearer {resolved_key}",
-                "Content-Type": "application/json",
-                "User-Agent": "browsefleet-python/0.1.0",
-            },
+            headers=headers,
             timeout=timeout,
         )
         self.sessions = _SessionsResource(self)
         self.profiles = _ProfilesResource(self)
         self.agent = _AgentResource(self)
-        self.billing = _BillingResource(self)
 
     def close(self) -> None:
         """Close the underlying HTTP client."""
@@ -609,7 +592,7 @@ class BrowseFleet:
                     return seconds
             except ValueError:
                 pass
-        base = min(1.0 * (2 ** attempt), 30.0)
+        base = min(1.0 * (2**attempt), 30.0)
         jitter = random.uniform(0, 0.2)
         return base + jitter
 
@@ -729,20 +712,34 @@ class _AsyncSessionsResource:
         return Session.from_dict(data)
 
     async def release(self, session_id: str) -> bool:
-        data = await self._client._request("POST", f"/v1/sessions/{quote(session_id, safe='')}/release")
+        data = await self._client._request(
+            "POST", f"/v1/sessions/{quote(session_id, safe='')}/release"
+        )
         return data.get("released", False)
 
     async def release_all(self) -> int:
         data = await self._client._request("POST", "/v1/sessions/release", json={})
         return data.get("released", 0)
 
-    async def release_batch(self, ids: list[str]) -> int:
+    async def release_batch(self, ids: list[str]) -> int:  # type: ignore[valid-type]
         data = await self._client._request("POST", "/v1/sessions/release", json={"ids": ids})
         return data.get("released", 0)
 
+    async def control(self, session_id: str, **kwargs: Any) -> Session:
+        """Switch the session's control mode and optionally toggle sensitive mode."""
+        body = _convert_keys(kwargs)
+        data = await self._client._request(
+            "POST",
+            f"/v1/sessions/{quote(session_id, safe='')}/control",
+            json=body,
+        )
+        return Session.from_dict(data)
+
     async def actions(self, session_id: str, actions: Sequence[BrowserAction]) -> ActionResponse:
         body = {"actions": _convert_keys(list(actions))}
-        data = await self._client._request("POST", f"/v1/sessions/{quote(session_id, safe='')}/actions", json=body)
+        data = await self._client._request(
+            "POST", f"/v1/sessions/{quote(session_id, safe='')}/actions", json=body
+        )
         return ActionResponse.from_dict(data)
 
     async def solve_captcha(self, session_id: str, type: str = "auto") -> CaptchaResult:
@@ -753,7 +750,9 @@ class _AsyncSessionsResource:
         )
         return CaptchaResult.from_dict(data)
 
-    async def upload_file(self, session_id: str, file_name: str, file_data: bytes) -> dict[str, Any]:
+    async def upload_file(
+        self, session_id: str, file_name: str, file_data: bytes
+    ) -> dict[str, Any]:
         files = {"file": (file_name, file_data)}
         return await self._client._request(
             "POST",
@@ -761,8 +760,10 @@ class _AsyncSessionsResource:
             files=files,
         )
 
-    async def list_files(self, session_id: str) -> list[str]:
-        data = await self._client._request("GET", f"/v1/sessions/{quote(session_id, safe='')}/files")
+    async def list_files(self, session_id: str) -> list[str]:  # type: ignore[valid-type]
+        data = await self._client._request(
+            "GET", f"/v1/sessions/{quote(session_id, safe='')}/files"
+        )
         return data.get("files", [])
 
     async def download_file(self, session_id: str, file_name: str) -> bytes:
@@ -892,30 +893,6 @@ class _AsyncAgentResource:
                 )
 
 
-class _AsyncBillingResource:
-    """Async namespace for billing-related API calls."""
-
-    def __init__(self, client: AsyncBrowseFleet) -> None:
-        self._client = client
-
-    async def create_checkout(self, price_id: str, success_url: str, cancel_url: str) -> dict[str, Any]:
-        return await self._client._request(
-            "POST",
-            "/v1/billing/checkout",
-            json={"priceId": price_id, "successUrl": success_url, "cancelUrl": cancel_url},
-        )
-
-    async def create_portal(self, return_url: str) -> dict[str, Any]:
-        return await self._client._request(
-            "POST",
-            "/v1/billing/portal",
-            json={"returnUrl": return_url},
-        )
-
-    async def get_usage(self) -> dict[str, Any]:
-        return await self._client._request("GET", "/v1/billing/usage")
-
-
 class AsyncBrowseFleet:
     """Async BrowseFleet API client.
 
@@ -941,28 +918,30 @@ class AsyncBrowseFleet:
     def __init__(
         self,
         api_key: str | None = None,
-        base_url: str = "https://api.browsefleet.com",
+        base_url: str | None = None,
         timeout: float = 60.0,
         max_retries: int = 2,
     ) -> None:
-        resolved_key = api_key or os.environ.get("BROWSEFLEET_API_KEY")
-        if not resolved_key:
-            raise AuthError("api_key is required — pass it directly or set BROWSEFLEET_API_KEY")
-        self._base_url = base_url.rstrip("/")
+        resolved_key = api_key or os.environ.get("BROWSEFLEET_API_KEY") or ""
+        resolved_url = (
+            base_url or os.environ.get("BROWSEFLEET_URL") or "http://localhost:3000"
+        ).rstrip("/")
+        self._base_url = resolved_url
         self._max_retries = max_retries
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": f"browsefleet-python/{_sdk_version()}",
+        }
+        if resolved_key:
+            headers["x-api-key"] = resolved_key
         self._client = httpx.AsyncClient(
             base_url=self._base_url,
-            headers={
-                "Authorization": f"Bearer {resolved_key}",
-                "Content-Type": "application/json",
-                "User-Agent": "browsefleet-python/0.1.0",
-            },
+            headers=headers,
             timeout=timeout,
         )
         self.sessions = _AsyncSessionsResource(self)
         self.profiles = _AsyncProfilesResource(self)
         self.agent = _AsyncAgentResource(self)
-        self.billing = _AsyncBillingResource(self)
 
     async def close(self) -> None:
         """Close the underlying HTTP client."""
@@ -1013,7 +992,7 @@ class AsyncBrowseFleet:
                     return seconds
             except ValueError:
                 pass
-        base = min(1.0 * (2 ** attempt), 30.0)
+        base = min(1.0 * (2**attempt), 30.0)
         jitter = random.uniform(0, 0.2)
         return base + jitter
 
@@ -1038,6 +1017,7 @@ class AsyncBrowseFleet:
             if self._is_retryable(response.status_code) and attempt < self._max_retries:
                 delay = self._retry_delay(attempt, response.headers.get("retry-after"))
                 import asyncio
+
                 await asyncio.sleep(delay)
                 continue
 
@@ -1055,7 +1035,9 @@ class AsyncBrowseFleet:
         response = await self._do_request(method, path, **kwargs)
         return response.content
 
-    async def _stream_sse(self, method: str, path: str, **kwargs: Any) -> AsyncIterator[dict[str, Any]]:
+    async def _stream_sse(
+        self, method: str, path: str, **kwargs: Any
+    ) -> AsyncIterator[dict[str, Any]]:
         if "files" in kwargs:
             headers = {k: v for k, v in self._client.headers.items() if k.lower() != "content-type"}
             kwargs["headers"] = headers
