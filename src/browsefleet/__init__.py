@@ -1,4 +1,6 @@
-"""BrowseFleet Python SDK — cloud browser API for AI agents and automation."""
+"""BrowseFleet Python SDK, the open-source cloud browser API for AI agents."""
+
+from importlib.metadata import PackageNotFoundError, version
 
 from .client import AsyncBrowseFleet, BrowseFleet
 from .errors import (
@@ -16,31 +18,39 @@ from .types import (
     AgentResult,
     AgentStep,
     CaptchaResult,
+    ControlSessionParams,
     Profile,
     ScrapeResult,
     Session,
+    SessionControlMode,
     UsageStats,
 )
 
+try:
+    __version__ = version("browsefleet")
+except PackageNotFoundError:
+    __version__ = "0.0.0-dev"
+
 __all__ = [
-    "AsyncBrowseFleet",
-    "BrowseFleet",
-    "BrowseFleetError",
-    "AuthError",
-    "NotFoundError",
-    "RateLimitError",
-    "ServerError",
-    "TimeoutError",
-    "ValidationError",
     "ActionResponse",
     "ActionResult",
     "AgentResult",
     "AgentStep",
+    "AsyncBrowseFleet",
+    "AuthError",
+    "BrowseFleet",
+    "BrowseFleetError",
     "CaptchaResult",
+    "ControlSessionParams",
+    "NotFoundError",
     "Profile",
+    "RateLimitError",
     "ScrapeResult",
+    "ServerError",
     "Session",
+    "SessionControlMode",
+    "TimeoutError",
     "UsageStats",
+    "ValidationError",
+    "__version__",
 ]
-
-__version__ = "0.1.0"

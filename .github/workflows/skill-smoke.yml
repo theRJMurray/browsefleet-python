@@ -1,0 +1,44 @@
+name: skill.md smoke test
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+    paths:
+      - 'skill.md'
+      - 'pyproject.toml'
+      - 'src/**'
+      - '.github/workflows/skill-smoke.yml'
+
+concurrency:
+  group: skill-smoke-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  tldr:
+    name: skill.md TL;DR
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: '.python-version'
+
+      - name: Run TL;DR (install + test)
+        run: |
+          set -ex
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -e ".[dev]"
+          .venv/bin/pytest
+
+      - name: Smoke import check
+        run: |
+          .venv/bin/python -c "import browsefleet; print(browsefleet.__version__)"
+          .venv/bin/python -c "from browsefleet import BrowseFleet, AsyncBrowseFleet; print(type(BrowseFleet()), type(AsyncBrowseFleet()))"

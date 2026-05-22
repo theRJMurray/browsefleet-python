@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Literal, TypedDict
-
 
 # ─── Session Types ─────────────────────────────────────────────────────────
 
@@ -21,19 +20,31 @@ class CookieParam(TypedDict, total=False):
     path: str
 
 
+SessionControlMode = Literal["agent", "human", "paused"]
+
+
 class CreateSessionParams(TypedDict, total=False):
     session_id: str
     proxy_url: str
     stealth: Literal["none", "basic", "full"]
+    headless: bool
     user_agent: str
     viewport: Viewport
     timeout: int
     profile_id: str
+    operator_mode: bool
+    sensitive_mode: bool
     block_ads: bool
     cookies: list[CookieParam]
     timezone: str
     locale: str
     headers: dict[str, str]
+
+
+class ControlSessionParams(TypedDict, total=False):
+    control_mode: SessionControlMode
+    sensitive_mode: bool
+    reason: str
 
 
 @dataclass
@@ -42,13 +53,19 @@ class Session:
     status: str
     websocket_url: str
     viewer_url: str
+    events_url: str
     created_at: str
     expires_at: str
     timeout: int
     stealth: str
     viewport: Viewport
+    operator_mode: bool
+    control_mode: SessionControlMode
+    sensitive_mode: bool
     proxy_url: str | None = None
     profile_id: str | None = None
+    current_url: str | None = None
+    title: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Session:
@@ -57,13 +74,19 @@ class Session:
             status=data["status"],
             websocket_url=data["websocketUrl"],
             viewer_url=data["viewerUrl"],
+            events_url=data.get("eventsUrl", ""),
             created_at=data["createdAt"],
             expires_at=data["expiresAt"],
             timeout=data["timeout"],
             stealth=data["stealth"],
             viewport=data.get("viewport", {"width": 1920, "height": 1080}),
+            operator_mode=bool(data.get("operatorMode", False)),
+            control_mode=data.get("controlMode", "agent"),
+            sensitive_mode=bool(data.get("sensitiveMode", False)),
             proxy_url=data.get("proxyUrl"),
             profile_id=data.get("profileId"),
+            current_url=data.get("currentUrl"),
+            title=data.get("title"),
         )
 
 
