@@ -4,6 +4,20 @@ All notable changes to the BrowseFleet Python SDK are documented here. The forma
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the SDK adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.1.0 (2026-05-22)
+
+
+### Features
+
+* agent/billing/live endpoints, async client, full API coverage ([e7233ab](https://github.com/theRJMurray/browsefleet-python/commit/e7233ab2071ae2a3f7345bf89b6aea2bf49c8273))
+* auto-retry, default base_url, env fallback, typed errors, py.typed ([343a3a5](https://github.com/theRJMurray/browsefleet-python/commit/343a3a5f845bcb0634373303164c09d9461f34cf))
+* oss phase 5 foundation, sync + async, tests, CI ([#1](https://github.com/theRJMurray/browsefleet-python/issues/1)) ([78d7667](https://github.com/theRJMurray/browsefleet-python/commit/78d76677418ebf53b8bd37e4b76d1060f88e9e78))
+
+
+### Bug Fixes
+
+* async live() yields properly, SSE handles [DONE] sentinel ([bc78a43](https://github.com/theRJMurray/browsefleet-python/commit/bc78a4372e010a00028f2ab4c20e854823d99323))
+
 ## [Unreleased]
 
 ### Added
