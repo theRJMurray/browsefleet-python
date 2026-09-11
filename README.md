@@ -1,8 +1,11 @@
+---
+title: BrowseFleet Python SDK
+---
+
 # browsefleet (Python SDK)
 
-Official Python SDK for [BrowseFleet](https://browsefleet.com), the open-source cloud browser API for AI agents.
+Official Python SDK for [BrowseFleet](https://github.com/theRJMurray/browsefleet), the open-source browser API for AI agents.
 
-[![PyPI](https://img.shields.io/pypi/v/browsefleet.svg)](https://pypi.org/project/browsefleet/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Python](https://img.shields.io/badge/python-%3E%3D3.10-3776ab.svg)](./.python-version)
 [![Issues](https://img.shields.io/github/issues/theRJMurray/browsefleet-python)](https://github.com/theRJMurray/browsefleet-python/issues)
@@ -11,10 +14,35 @@ One runtime dependency (`httpx`). Sync + async clients in one import. Full type 
 
 > **Working in this repo with an AI agent?** Read [`skill.md`](./skill.md) first. It teaches Claude Code, Cursor, Aider, or any coding agent how to set up, run, test, and contribute to this repo with no further instruction.
 
-## Install
+## Install from source
+
+The SDK is available from this repository. As of September 11, 2026, `browsefleet` is not published on PyPI; `pip install browsefleet` is not an available installation route.
+
+Use Python 3.10 or newer. Create and activate a virtual environment, then install from the checkout:
 
 ```bash
-pip install browsefleet
+git clone https://github.com/theRJMurray/browsefleet-python.git
+cd browsefleet-python
+python -m venv .venv
+```
+
+Activate the environment on macOS/Linux:
+
+```bash
+source .venv/bin/activate
+```
+
+Or activate it in Windows PowerShell:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+Then install and check the import:
+
+```bash
+python -m pip install .
+python -c "from browsefleet import BrowseFleet, AsyncBrowseFleet; print('BrowseFleet import OK')"
 ```
 
 The SDK needs a running BrowseFleet server. Follow the [server repo's Quick start](https://github.com/theRJMurray/browsefleet#quick-start) to spin one up via Docker or local Node dev.
@@ -83,7 +111,7 @@ Both clients share the same public surface. Same methods, same return types, sam
 - **Auto-retry.** Exponential backoff on `429` / `5xx`, honors `Retry-After`. Configurable per client via `max_retries`.
 - **Env-var fallback.** `BROWSEFLEET_URL` and `BROWSEFLEET_API_KEY` are read when not passed explicitly.
 - **Sync + async.** `BrowseFleet` and `AsyncBrowseFleet`. Both implement context-manager protocol.
-- **Typed.** `py.typed` marker, dataclass return types, `TypedDict` request params. Strict mypy across the source.
+- **Typed.** `py.typed` marker, dataclass return types, `TypedDict` request params. Mypy checks function annotations and bodies across the source; strict mode is not enabled.
 
 ## Configuration
 
@@ -121,4 +149,4 @@ MIT. See [`LICENSE`](./LICENSE).
 
 - [BrowseFleet server](https://github.com/theRJMurray/browsefleet)
 - [Node SDK](https://github.com/theRJMurray/browsefleet-node)
-- [Marketing site](https://browsefleet.com)
+- [Marketing site source](https://github.com/theRJMurray/browsefleet-web)
